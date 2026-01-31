@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- 背景圆角矩形 -->
+  <rect x="0" y="0" width="512" height="512" rx="120" fill="url(#gradient)"/>
+  
+  <!-- 渐变定义 -->
+  <defs>
+    <linearGradient id="gradient" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0EA5E9"/>
+      <stop offset="50%" stop-color="#06B6D4"/>
+      <stop offset="100%" stop-color="#14B8A6"/>
+    </linearGradient>
+    
+    <!-- 脉动波形的发光效果 -->
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="8" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <!-- 评论气泡主体 -->
+  <g transform="translate(106, 86)">
+    <!-- 气泡尾部 -->
+    <path d="M60 300 L20 360 L80 340" fill="url(#gradient)"/>
+    
+    <!-- 主气泡形状 -->
+    <rect x="0" y="0" width="300" height="340" rx="60" fill="url(#gradient)"/>
+  </g>
+  
+  <!-- 脉动波形 - 心电图样式 -->
+  <g transform="translate(136, 216)" filter="url(#glow)">
+    <path d="M0 80 L40 80 L60 40 L80 120 L100 20 L120 140 L140 60 L160 80 
+             L180 80 L200 50 L220 110 L240 80 L260 80 L280 80" 
+          stroke="white" 
+          stroke-width="12" 
+          stroke-linecap="round" 
+          stroke-linejoin="round" 
+          fill="none">
+      <animate 
+        attributeName="stroke-dasharray" 
+        from="0,1000" 
+        to="500,0" 
+        dur="2s" 
+        repeatCount="indefinite"/>
+    </path>
+    
+    <!-- 脉冲圆点 -->
+    <circle cx="200" cy="80" r="20" fill="white">
+      <animate 
+        attributeName="r" 
+        values="20;28;20" 
+        dur="1.5s" 
+        repeatCount="indefinite"/>
+      <animate 
+        attributeName="opacity" 
+        values="1;0.7;1" 
+        dur="1.5s" 
+        repeatCount="indefinite"/>
+    </circle>
+  </g>
+  
+  <!-- 装饰性粒子 -->
+  <circle cx="420" cy="100" r="12" fill="white" opacity="0.6">
+    <animate attributeName="opacity" values="0.6;1;0.6" dur="2s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="450" cy="150" r="6" fill="white" opacity="0.4">
+    <animate attributeName="opacity" values="0.4;0.8;0.4" dur="1.8s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="400" cy="180" r="8" fill="white" opacity="0.5">
+    <animate attributeName="opacity" values="0.5;0.9;0.5" dur="2.2s" repeatCount="indefinite"/>
+  </circle>
+  
+  <!-- 外发光效果 -->
+  <rect x="20" y="20" width="472" height="472" rx="100" 
+        stroke="url(#gradient)" 
+        stroke-width="4" 
+        fill="none" 
+        opacity="0.3"/>
+</svg>

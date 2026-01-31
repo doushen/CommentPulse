@@ -1,0 +1,24 @@
+{
+  "name": "commentpulse",
+  "version": "1.0.0",
+  "description": "B站评论分析浏览器插件",
+  "type": "module",
+  "scripts": {
+    "dev": "vite build --watch",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "vue": "^3.3.0",
+    "element-plus": "^2.4.0",
+    "echarts": "^5.4.0",
+    "echarts-wordcloud": "^2.1.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^4.5.0",
+    "@types/chrome": "^0.0.251",
+    "typescript": "^5.0.0",
+    "vite": "^5.0.0",
+    "vite-plugin-static-copy": "^1.0.0"
+  }
+}

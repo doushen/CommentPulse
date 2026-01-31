@@ -2,7 +2,7 @@ import type { Comment } from '@/types'
 
 /**
  * 从B站视频页面抓取评论数据
- * 适配最新版B站页面结构
+ * 适配新版B站页面结构
  */
 export class CommentScraper {
   private comments: Comment[] = []
@@ -30,26 +30,15 @@ export class CommentScraper {
     const startTime = Date.now()
     
     while (Date.now() - startTime < maxWait) {
-      // 尝试多种方式查找评论区域
-      const selectors = [
-        // 新版B站
-        '.bili-comment',
-        '.comment-list',
-        '.reply-list',
-        // 通用
-        '[class*="comment"]',
-        '[id*="comment"]',
-        // 降级方案
-        'section',
-        'main'
-      ]
+      // 查找评论容器
+      const commentWrap = document.querySelector('.reply-wrap') || 
+                          document.querySelector('[class*="reply-wrap"]') ||
+                          document.querySelector('[class*="comment-wrap"]') ||
+                          document.querySelector('.bili-comment')
       
-      for (const selector of selectors) {
-        const el = document.querySelector(selector)
-        if (el && el.textContent && el.textContent.length > 100) {
-          console.log('CommentPulse: 找到评论区域', selector, el.className)
-          return
-        }
+      if (commentWrap) {
+        console.log('CommentPulse: 找到评论区域', commentWrap.className)
+        return
       }
       
       await new Promise(resolve => setTimeout(resolve, 200))
@@ -58,39 +47,21 @@ export class CommentScraper {
   }
 
   private scrapeCurrentComments(): void {
-    // 尝试所有可能的评论选择器
+    // 直接使用已知的 B站评论区结构
     const selectors = [
-      // 新版B站
-      '.reply-item',
-      '.comment-item', 
-      '.bili-comment-item',
-      // 旧版B站
-      '.bb-comment .reply-item',
-      '.comment-list .item',
-      // 通用选择器
-      '[class*="reply-item"]',
-      '[class*="comment-item"]',
-      '[class*="comment-"]',
-      // 按内容特征查找
-      '.user-name',
-      '[class*="username"]',
-      // 更宽松的查找
-      'li[class*="rply"]',
-      'div[class*="reply"]',
-      // 最后手段：查找所有可能的评论容器内的文本元素
-      '.text-content',
-      '.reply-content',
-      '[class*="content"]'
+      '.reply-wrap .reply-item',
+      '[class*="reply-wrap"] [class*="reply-item"]',
+      '.bili-comment .comment-item',
+      '[class*="comment-wrap"] [class*="comment-item"]'
     ]
 
-    let foundAny = false
     let totalComments = 0
     
     for (const selector of selectors) {
       const elements = document.querySelectorAll(selector)
+      
       if (elements.length > 0) {
-        console.log(`CommentPulse: 选择器 "${selector}" 找到 ${elements.length} 个元素`)
-        foundAny = true
+        console.log(`CommentPulse: 选择器 "${selector}" 找到 ${elements.length} 个评论`)
         
         elements.forEach((el, idx) => {
           const comment = this.extractCommentData(el, idx)
@@ -102,80 +73,93 @@ export class CommentScraper {
             }
           }
         })
+        
+        // 找到一个有效的选择器就退出
+        if (totalComments > 0) break
       }
     }
 
-    if (!foundAny) {
-      // 降级方案：直接查找包含用户名的所有元素
-      console.log('CommentPulse: 尝试降级方案，查找所有用户名元素')
-      const userElements = document.querySelectorAll('[class*="user"], [class*="name"]')
-      console.log(`CommentPulse: 找到 ${userElements.length} 个用户名相关元素`)
-      
-      if (userElements.length > 0) {
-        let idx = 0
-        userElements.forEach(el => {
-          const parent = el.closest('div, li, tr, article')
-          if (parent) {
-            const comment = this.extractCommentData(parent, idx++)
-            if (comment && comment.content && comment.content.length > 2) {
-              if (!this.comments.find(c => c.id === comment.id)) {
-                this.comments.push(comment)
-              }
-            }
-          }
-        })
-      }
-    }
-    
-    if (totalComments > 0) {
+    if (totalComments === 0) {
+      // 降级方案：尝试更宽松的查找
+      console.log('CommentPulse: 尝试降级方案...')
+      this.fallbackScrape()
+    } else {
       console.log(`CommentPulse: 成功抓取 ${totalComments} 条评论，总计 ${this.comments.length} 条`)
     }
   }
 
+  private fallbackScrape(): void {
+    // 降级方案：查找用户信息+评论内容的组合
+    const userContents = document.querySelectorAll('.user-content, [class*="user-content"]')
+    
+    userContents.forEach((el, idx) => {
+      const parent = el.closest('.reply-item, [class*="reply-item"], li, div[class*="reply"]')
+      if (parent) {
+        const comment = this.extractCommentData(parent, idx)
+        if (comment && comment.content && comment.content.length > 2) {
+          if (!this.comments.find(c => c.id === comment.id)) {
+            this.comments.push(comment)
+          }
+        }
+      }
+    })
+    
+    console.log(`CommentPulse: 降级方案抓取 ${this.comments.length} 条评论`)
+  }
+
   private extractCommentData(element: Element, index: number): Comment | null {
     try {
-      // 获取文本内容（排除按钮等非内容元素）
-      const allText = element.textContent || ''
+      // 用户名 - 从 user-name 或 user-info 中找
+      const userNameEl = element.querySelector('.user-name, [class*="user-name"], .username, [class*="username"]')
+      const username = userNameEl?.textContent?.trim() || 
+                       userNameEl?.getAttribute('text')?.trim() || 
+                       `用户${index}`
+
+      // 评论内容 - 从 reply-content 中找
+      const contentEl = element.querySelector('.reply-content, [class*="reply-content"], .comment-content, [class*="comment-content"]')
+      let content = contentEl?.textContent?.trim() || ''
       
-      // 过滤掉常见非内容文本
-      const lines = allText.split('\n')
-        .map(l => l.trim())
-        .filter(l => l.length > 0)
-        .filter(l => !l.match(/^\d+$/)) // 纯数字
-        .filter(l => !l.match(/^\d{4}-\d{2}-\d{2}/)) // 日期
-        .filter(l => !l.includes('回复')) // 回复链接
-        .filter(l => !l.includes('点赞')) // 点赞链接
-        .filter(l => !l.includes('收藏')) // 收藏链接
-        .filter(l => !l.includes('分享')) // 分享链接
-        .filter(l => !l.includes('IP属地')) // IP属地
-      
-      // 评论内容通常是较长的那行
-      const content = lines.find(l => l.length > 5) || lines[lines.length - 1] || ''
-      
+      // 如果没找到，尝试获取元素的直接文本
+      if (!content) {
+        const allText = element.textContent || ''
+        const lines = allText.split('\n').map(l => l.trim()).filter(l => l.length > 0)
+        // 过滤掉非内容
+        content = lines.find(l => 
+          l.length > 3 && 
+          !l.match(/^\d+$/) && 
+          !l.includes('赞') &&
+          !l.includes('回复') &&
+          !l.includes('IP属地')
+        ) || ''
+      }
+
       if (!content || content.length < 3) {
         return null
       }
 
-      // 用户名（通常是较短的那行）
-      const username = lines.find(l => l.length > 1 && l.length < 20 && !l.includes('：')) || `用户${index}`
-
-      // 点赞数（包含数字的元素）
-      const likeText = lines.find(l => l.match(/\d+/) && (l.includes('赞') || l.includes('up') || l.match(/^\d+$/))) || '0'
+      // 点赞数 - 从 reply-info 中找数字
+      const replyInfoEl = element.querySelector('.reply-info, [class*="reply-info"]')
+      const likeText = replyInfoEl?.textContent?.trim() || '0'
       const likeCount = this.parseCount(likeText)
 
+      // 回复数
+      const replyCountEl = element.querySelector('.reply-count, [class*="reply-count"]')
+      const replyCountText = replyCountEl?.textContent?.trim() || '0'
+      const replyCount = this.parseCount(replyCountText)
+
       // 时间
-      const timeText = lines.find(l => l.match(/\d{2}:\d{2}/) || l.match(/\d+分钟前/) || l.match(/\d+小时前/) || l.match(/\d+天前/)) || ''
-      const time = timeText
+      const timeEl = element.querySelector('.reply-time, [class*="reply-time"], .time, [class*="time"]')
+      const time = timeEl?.textContent?.trim() || ''
 
       // 生成唯一ID
       const id = `${username}-${content.substring(0, 20)}-${index}-${Date.now()}`
 
       return {
         id,
-        username: username.substring(0, 20),
+        username: username.substring(0, 30),
         content: content.substring(0, 500),
         likeCount,
-        replyCount: 0,
+        replyCount,
         time
       }
     } catch (error) {
@@ -187,7 +171,6 @@ export class CommentScraper {
   private parseCount(text: string): number {
     if (!text) return 0
     
-    // 提取数字
     const num = parseFloat(text.replace(/[^\d.]/g, ''))
     if (isNaN(num)) return 0
     

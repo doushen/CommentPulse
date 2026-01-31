@@ -43,6 +43,7 @@
     {
       "resources": [
         "js/inject.js",
+        "js/inject-page.js",
         "js/index.js",
         "css/style.css"
       ],

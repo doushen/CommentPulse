@@ -2,23 +2,44 @@
 
 <div align="center">
 
-**B站视频评论分析浏览器插件，自动收集并分析视频评论**
+**B站视频评论分析浏览器插件 | 实时分析评论情绪、关键词和痛点**
+
+[![Chrome Web Store](https://img.shields.io/badge/Chrome-Extension-blue?logo=google-chrome)](https://chrome.google.com/)
+[![GitHub stars](https://img.shields.io/github/stars/doushen/CommentPulse)](https://github.com/doushen/CommentPulse)
+[![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
+[![Version](https://img.shields.io/badge/Version-1.0.0-orange)](CHANGELOG.md)
 
 </div>
 
 ---
 
-## ✨ 功能特性
+## ✨ 一句话介绍
 
-| 功能 | 描述 | 状态 |
-|------|------|------|
-| 🔄 **自动收集评论** | 自动滚动页面，拦截 API 请求收集所有评论 | ✅ 已完成 |
-| 📊 **评论统计分析** | 统计评论总数、平均点赞数 | ✅ 已完成 |
-| 😊 **情绪分析** | 区分好评/差评，统计数量 | ✅ 已完成 |
-| 🔥 **关键词提取** | 提取热门关键词并展示 | ✅ 已完成 |
-| ⚠️ **痛点识别** | 检测用户反馈的问题和抱怨 | ✅ 已完成 |
-| ❓ **问题统计** | 识别用户咨询类评论 | ✅ 已完成 |
-| 🎨 **美观的 UI** | 蓝色渐变风格，现代化界面 | ✅ 已完成 |
+**CommentPulse** 是一款B站视频评论分析插件，自动收集评论并分析情绪、关键词和用户痛点，帮助up主快速了解观众反馈。
+
+---
+
+## 🎯 核心功能
+
+| 功能 | 描述 |
+|------|------|
+| 🔄 **自动收集** | 自动滚动页面，智能拦截API请求，批量采集全部评论 |
+| 📊 **数据统计** | 评论总数、互动量、平均点赞等多维数据展示 |
+| 😊 **情绪分析** | AI级情绪识别，区分好评/中评/差评，统计占比 |
+| 🔥 **关键词提取** | 智能提取热门关键词，生成词云展示 |
+| ⚠️ **痛点识别** | 自动检测用户抱怨和负面反馈 |
+| ❓ **问题统计** | 识别用户咨询类评论回复 |
+| 🎨 **高，便于批量颜值UI** | 蓝色渐变主题，现代化交互设计 |
+
+---
+
+## 📸 产品截图
+
+> 自动滚动收集评论，实时展示分析结果
+
+| 评论收集 | 情绪分析 | 关键词提取 |
+|---------|---------|-----------|
+| ![收集](https://via.placeholder.com/300x200?text=自动收集评论) | ![情绪](https://via.placeholder.com/300x200?text=情绪分析) | ![词云](https://via.placeholder.com/300x200?text=关键词词云) |
 
 ---
 
@@ -26,12 +47,21 @@
 
 ### 安装方法
 
+**方式一：Chrome 商店安装**（即将上线）
+
+**方式二：本地加载**
 ```bash
 # 1. 克隆项目
 git clone https://github.com/doushen/CommentPulse.git
 cd CommentPulse
 
-# 2. 加载到浏览器
+# 2. 安装依赖
+npm install
+
+# 3. 构建
+npm run build
+
+# 4. 加载到浏览器
 # - 打开 chrome://extensions/
 # - 开启"开发者模式"
 # - 点击"加载已解压的扩展程序"
@@ -43,14 +73,42 @@ cd CommentPulse
 ## 📖 使用方法
 
 1. 打开任意 **B站视频页面**
-2. 点击页面右侧的 **评论脉搏图标**（蓝色渐变）
-3. 点击面板中的 **"开始收集"** 按钮
-4. 等待自动滚动收集评论
+2. 点击页面右侧的 **蓝色图标** 打开插件面板
+3. 点击 **"开始收集"** 按钮
+4. 等待自动滚动完成评论采集
 5. 查看分析结果：
-   - 总评论数、平均点赞
-   - 好评/差评数量
-   - 热门关键词
-   - 用户痛点
+   - 📊 评论数据总览
+   - 😊 情绪分布（好评/差评占比）
+   - 🔥 热门关键词
+   - ⚠️ 用户痛点识别
+
+---
+
+## 🎯 适用场景
+
+| 用户 | 用途 |
+|------|------|
+| **UP主** | 快速了解视频反馈，优化后续内容 |
+| **内容创作者** | 分析观众偏好，改进创作方向 |
+| **运营人员** | 监测舆情，及时发现负面反馈 |
+| **数据分析师** | 采集评论数据，进行深度分析 |
+
+---
+
+## 🛠️ 技术栈
+
+```
+前端: TypeScript + 原生JavaScript + CSS3
+构建: Vite
+特性: Chrome Extension Manifest V3
+存储: localStorage 缓存
+```
+
+**核心实现：**
+- Chrome Extension 内容脚本注入
+- XHR/Fetch 请求拦截
+- 自动滚动 + 懒加载触发
+- 关键词提取 + 简易情绪分类
 
 ---
 
@@ -59,53 +117,89 @@ cd CommentPulse
 ```
 CommentPulse/
 ├── src/
-│   └── content/
-│       └── inject-page.ts   # 主逻辑（UI + 评论收集 + 分析）
-├── dist/                    # 构建输出
+│   ├── content/
+│   │   ├── inject-page.ts    # 主逻辑（UI + 评论收集 + 分析）
+│   │   └── style.css         # 样式文件
+│   ├── popup/                # 弹窗页面
+│   └── background/           # 后台脚本
+├── dist/                     # 构建输出
 ├── public/
-│   └── icons/              # 图标文件
-│       ├── icon16.png
-│       ├── icon48.png
-│       ├── icon128.png
-│       └── logo.svg
-├── manifest.json           # Chrome 扩展配置
+│   └── icons/               # 图标资源
+├── manifest.json            # Chrome 扩展配置
+├── vite.config.ts           # Vite 构建配置
 └── README.md
 ```
 
 ---
 
-## 🛠️ 技术实现
+## 🎨 截图展示
 
-- **评论收集**：拦截页面 API 请求 + 自动滚动
-- **数据分析**：关键词提取、情绪分类
-- **UI**：原生 JavaScript + CSS（轻量级）
-- **存储**：localStorage 缓存数据
+```
+┌─────────────────────────────────────────┐
+│  📊 评论脉搏                           │
+├─────────────────────────────────────────┤
+│  🔄 开始收集                           │
+│                                         │
+│  📈 数据总览                           │
+│  ├─ 总评论数: 1,234                    │
+│  ├─ 平均点赞: 15.2                     │
+│  └─ 互动率: 23.5%                      │
+│                                         │
+│  😊 情绪分布                           │
+│  ├─ 👍 好评: 78% (963条)               │
+│  ├─ 😐 中评: 15% (185条)               │
+│  └─ 👎 差评: 7% (86条)                 │
+│                                         │
+│  🔥 热门关键词                         │
+│  #干货 #有趣 #支持 #期待 #哈哈         │
+│                                         │
+│  ⚠️ 用户痛点                           │
+│  × 画质问题 (23次)                     │
+│  × 声音小 (15次)                       │
+└─────────────────────────────────────────┘
+```
 
 ---
 
-## ⚠️ 注意事项
+## 📈 路线图
 
-- 需要在 B站视频页面使用
-- 评论收集需要一些时间（自动滚动）
-- 收集完成后可查看分析结果
+- [ ] 支持导出分析报告（PDF/Excel）
+- [ ] 接入AI大模型进行深度情感分析
+- [ ] 多平台支持（抖音、快手、小红书）
+- [ ] Chrome Web Store 上架
+- [ ] 数据对比（多期视频对比分析）
+
+---
+
+## 🤝 贡献指南
+
+欢迎提交 Issue 和 PR！
+
+1. Fork 本项目
+2. 创建分支 (`git checkout -b feature/amazing`)
+3. 提交改动 (`git commit -m 'Add amazing feature'`)
+4. 推送分支 (`git push origin feature/amazing`)
+5. 提交 Pull Request
 
 ---
 
 ## 📄 License
 
-MIT License
+MIT License - 欢迎学习和使用
 
 ---
 
 ## 📞 联系方式
 
-- **GitHub**: https://github.com/doushen/CommentPulse
-- **问题反馈**: GitHub Issues
+- **GitHub**: [@doushen](https://github.com/doushen/CommentPulse)
+- **问题反馈**: [GitHub Issues](https://github.com/doushen/CommentPulse/issues)
 
 ---
 
 <div align="center">
 
 **如果对你有帮助，请点个 ⭐ Star 支持！**
+
+Made with ❤️ by doushen
 
 </div>

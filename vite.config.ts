@@ -12,13 +12,14 @@ export default defineConfig({
   plugins: [
     vue(),
     {
-      name: 'copy-manifest',
+      name: 'copy-static',
       closeBundle() {
         if (!existsSync('dist')) {
           mkdirSync('dist', { recursive: true })
         }
+        // 复制 manifest
         copyFileSync('manifest.json', 'dist/manifest.json')
-        // 复制popup.html
+        // 复制 popup.html
         if (existsSync('src/popup/popup.html')) {
           copyFileSync('src/popup/popup.html', 'dist/popup.html')
         }
@@ -40,16 +41,16 @@ export default defineConfig({
     outDir: 'dist',
     rollupOptions: {
       input: {
-        content: resolve(__dirname, 'src/content/content.ts'),
-        inject: resolve(__dirname, 'src/content/inject.ts'),
-        background: resolve(__dirname, 'src/background/background.ts'),
-        popup: resolve(__dirname, 'src/popup/popup.ts')
+        // 统一后的 content script 入口
+        content: resolve(__dirname, 'src/content/index.ts'),
+        background: resolve(__dirname, 'src/background/index.ts'),
+        popup: resolve(__dirname, 'src/popup/index.ts')
       },
       output: {
         entryFileNames: (chunkInfo) => {
           return `js/${chunkInfo.name}.js`
         },
-        chunkFileNames: 'js/[name].js',
+        chunkFileNames: 'js/[name].[hash].js',
         assetFileNames: (assetInfo) => {
           if (assetInfo.name?.endsWith('.css')) {
             return 'css/[name][extname]'
@@ -59,21 +60,34 @@ export default defineConfig({
           }
           return 'assets/[name][extname]'
         },
-        // 将所有共享依赖打包到 index.js
-        manualChunks: (id) => {
-          // 将所有 node_modules 的依赖打包到 index.js
-          if (id.includes('node_modules')) {
-            return 'index'
-          }
+        // 依赖分包
+        manualChunks: {
+          'vendor': ['vue', 'element-plus', 'echarts']
         },
         format: 'es'
       }
     },
-    cssCodeSplit: false
+    cssCodeSplit: true,
+    sourcemap: true,
+    minify: 'terser',
+    terserOptions: {
+      compress: {
+        drop_console: false, // 保留 console 用于调试
+        drop_debugger: true
+      }
+    }
   },
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src')
+    }
+  },
+  // 开发配置
+  server: {
+    port: 5173,
+    strictPort: true,
+    hmr: {
+      port: 5174
     }
   }
 })

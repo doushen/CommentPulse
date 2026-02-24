@@ -226,7 +226,7 @@ export class CommentScraper {
   /**
    * 递归查询 Shadow DOM
    */
-  private queryShadowAll(selector: string, root: Document | Element = document): Element[] {
+  private queryShadowAll(selector: string, root: Document | Element | ShadowRoot = document): Element[] {
     const results: Element[] = []
     
     // 正常查询

@@ -6,7 +6,7 @@ import { analyzeCommentsSentiment, calculateEmotionStats } from '@/utils/sentime
 import { extractKeywords, extractTopics } from '@/utils/wordCloud'
 import { filterTopComments } from '@/utils/commentFilter'
 import { generateAISuggestion } from '@/utils/aiSuggestion'
-import type { AnalysisResult, Comment } from '@/types'
+import type { AnalysisResult } from '@/types'
 
 console.log('[CommentPulse] Content script loaded')
 
@@ -252,7 +252,7 @@ async function startAnalysis(): Promise<void> {
 
     // 3. 提取关键词
     const wordCloud = extractKeywords(analyzedComments)
-    const topics = extractTopics(analyzedComments)
+    const _topics = extractTopics(analyzedComments)
 
     // 4. 筛选精选评论
     const topComments = filterTopComments(analyzedComments, { limit: 5 })

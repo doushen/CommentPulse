@@ -2,7 +2,7 @@
 // Popup 入口
 
 import { createApp } from 'vue'
-import Popup from './Popup.vue'
+import Popup from './popup.vue'
 import './popup.css'
 
 // 创建应用

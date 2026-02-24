@@ -9,7 +9,7 @@ import type { Comment, EmotionStats, TopComment, AISuggestion } from '@/types'
 export async function generateAISuggestion(
   comments: Comment[],
   emotionStats: EmotionStats,
-  topComments: TopComment[]
+  _topComments: TopComment[]
 ): Promise<AISuggestion> {
   // 1. 分析常见问题
   const commonIssues = analyzeCommonIssues(comments)

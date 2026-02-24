@@ -1,11 +1,13 @@
 {
   "manifest_version": 3,
   "name": "CommentPulse - 评论脉搏",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "B站评论分析工具，实时分析视频评论情绪、关键词和精选评论",
   "permissions": [
     "activeTab",
-    "storage"
+    "storage",
+    "downloads",
+    "notifications"
   ],
   "host_permissions": [
     "https://www.bilibili.com/*",
@@ -18,6 +20,7 @@
         "https://*.bilibili.com/video/*"
       ],
       "js": ["js/content.js"],
+      "css": ["css/content.css"],
       "run_at": "document_idle",
       "all_frames": false
     }
@@ -32,7 +35,8 @@
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
-    }
+    },
+    "default_title": "CommentPulse - 点击分析评论"
   },
   "icons": {
     "16": "icons/icon16.png",
@@ -42,10 +46,9 @@
   "web_accessible_resources": [
     {
       "resources": [
-        "js/inject.js",
-        "js/inject-page.js",
-        "js/index.js",
-        "css/style.css"
+        "js/*.js",
+        "css/*.css",
+        "assets/*"
       ],
       "matches": ["https://www.bilibili.com/*", "https://*.bilibili.com/*"]
     }

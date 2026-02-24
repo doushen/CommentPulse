@@ -347,7 +347,7 @@ function showResults(result: AnalysisResult, totalCount: number): void {
 }
 
 // ========== 消息监听 ==========
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === 'EXTRACT_COMMENTS') {
     commentScraper.startScraping().then(result => {
       sendResponse({ success: true, ...result })

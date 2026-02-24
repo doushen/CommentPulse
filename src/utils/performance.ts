@@ -41,7 +41,7 @@ export function getPerformanceData(): PerformanceEntry[] {
  * 性能装饰器
  */
 export function measurePerformance(
-  target: any,
+  _target: any,
   propertyKey: string,
   descriptor: PropertyDescriptor
 ) {

@@ -77,7 +77,7 @@ export async function clearComments(): Promise<void> {
   const meta = await chrome.storage.local.get(STORAGE_KEYS.COMMENTS_META)
   const metaData = meta[STORAGE_KEYS.COMMENTS_META]
   
-  const keysToRemove = [STORAGE_KEYS.COMMENTS_META, STORAGE_KEYS.LAST_UPDATE]
+  const keysToRemove: string[] = [STORAGE_KEYS.COMMENTS_META, STORAGE_KEYS.LAST_UPDATE]
   
   if (metaData?.chunks) {
     for (let i = 0; i < metaData.chunks; i++) {

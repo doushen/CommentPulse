@@ -18,7 +18,7 @@ export function filterTopComments(
   const {
     limit = 10,
     minLikeCount = 5,
-    includeReplies = false,
+    includeReplies: _includeReplies = false,
     deduplicate = true
   } = options
 

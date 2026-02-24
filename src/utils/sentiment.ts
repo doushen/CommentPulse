@@ -1,124 +1,151 @@
-import type { Comment, EmotionStats } from '@/types'
+// src/utils/sentiment.ts
+// 情感分析工具
 
-/**
- * 增强版中文情感分析（基于关键词和模式匹配）
- */
-export async function analyzeSentiment(comment: Comment): Promise<Comment> {
-  return analyzeSentimentEnhanced(comment)
+import type { Comment, EmotionStats, SentimentType } from '@/types'
+
+// 情感词典
+const SENTIMENT_DICT = {
+  // 正面词
+  positive: [
+    '好', '棒', '赞', '喜欢', '爱', '优秀', '精彩', '厉害', '强', '666',
+    '支持', '期待', '感谢', '有用', '干货', '学到了', '受益匪浅', '清晰',
+    '详细', '耐心', '专业', '良心', '宝藏', '神仙', ' yyds', 'nb',
+    '不错', '可以', '还行', '给力', '完美', '漂亮', '好看', '好听',
+    '感动', '泪目', '笑死', '哈哈哈', '太真实', '有内味', '妙啊',
+    '高能', '舒适', '治愈', '上头', '真香', '吹爆', '打卡', '已三连'
+  ],
+  // 负面词
+  negative: [
+    '差', '烂', '垃圾', '坑', '骗', '恶心', '讨厌', '失望', '无语', '服了',
+    '浪费时间', '没意义', '水', '敷衍', '粗糙', '混乱', '难懂', '听不懂',
+    '错误', '误导', '假', '装', '演', '炒作', '恰饭', '广告',
+    '难听', '难看', '无聊', '尴尬', '冷', '土', 'low', '拉胯',
+    '没用', '废话', '啰嗦', '拖沓', '慢', '卡', '糊', '断',
+    '反对', '抵制', '举报', '踩', '踩了', '踩一脚', '不看了', '取关'
+  ],
+  // 中性词（用于识别中立内容）
+  neutral: [
+    '请问', '怎么', '什么', '为什么', '如何', '吗', '呢', '吧',
+    '了解一下', '咨询', '求助', '问下', '问一下'
+  ]
 }
 
 /**
- * 增强版情感分析（关键词匹配 + 模式识别）
+ * 分析单条评论的情感
  */
-function analyzeSentimentEnhanced(comment: Comment): Comment {
-  const content = comment.content
-  
-  // 扩展的积极关键词（包含常见表达）
-  const positiveWords = [
-    '好', '棒', '赞', '喜欢', '支持', '不错', '厉害', '优秀', '完美', '感谢', '谢谢', 
-    '👍', '❤️', '💕', '💖', '💗', '💝', '🎉', '🎊', '太棒了', '太好了', '真不错',
-    '给力', '牛逼', '666', 'nice', 'good', 'great', 'awesome', 'amazing', 'wonderful',
-    '爱了', '喜欢', '推荐', '收藏', '三连', '投币', '关注', 'up主加油', '继续加油',
-    '期待', '希望', '满意', '开心', '高兴', '快乐', '舒服', '爽', '过瘾'
-  ]
-  
-  // 扩展的消极关键词
-  const negativeWords = [
-    '差', '烂', '垃圾', '讨厌', '失望', '问题', '错误', '不好', '不行', '糟糕', 
-    '😡', '💔', '😞', '😠', '😢', '😭', '🤮', '💩',
-    '无语', '服了', '醉了', '恶心', '反感', '讨厌', '烦', '无聊', '没意思',
-    '差评', '不推荐', '避雷', '踩坑', '浪费时间', '浪费钱', '后悔',
-    'bug', '错误', '问题', '失败', '糟糕', '差劲', '垃圾', '废物'
-  ]
-  
-  // 中性/疑问词（会降低情绪强度）
-  const neutralWords = ['？', '?', '什么', '为什么', '怎么', '如何', '能否', '可以吗']
+export function analyzeSentiment(comment: Comment): { type: SentimentType; score: number } {
+  const content = comment.content.toLowerCase()
   
   let positiveScore = 0
   let negativeScore = 0
-  let neutralScore = 0
   
-  // 计算积极分数
-  positiveWords.forEach(word => {
-    const count = (content.match(new RegExp(word, 'gi')) || []).length
-    positiveScore += count
-  })
-  
-  // 计算消极分数
-  negativeWords.forEach(word => {
-    const count = (content.match(new RegExp(word, 'gi')) || []).length
-    negativeScore += count
-  })
-  
-  // 计算中性分数
-  neutralWords.forEach(word => {
-    if (content.includes(word)) neutralScore++
-  })
-  
-  // 表情符号检测
-  const emojiPositive = /(👍|❤️|💕|💖|💗|💝|🎉|🎊|😊|😄|😃|😁|😆|😍|🥰|😘)/g
-  const emojiNegative = /(😡|💔|😞|😠|😢|😭|🤮|💩|😤|😰|😨|😱)/g
-  
-  const emojiPositiveCount = (content.match(emojiPositive) || []).length
-  const emojiNegativeCount = (content.match(emojiNegative) || []).length
-  
-  positiveScore += emojiPositiveCount * 2 // 表情符号权重更高
-  negativeScore += emojiNegativeCount * 2
-  
-  // 长度调整：较长的评论可能包含更多信息
-  const lengthFactor = Math.min(content.length / 50, 1.5)
-  positiveScore *= lengthFactor
-  negativeScore *= lengthFactor
-  
-  // 计算最终情感分数
-  const totalScore = positiveScore + negativeScore + neutralScore
-  
-  if (totalScore === 0) {
-    // 没有明显情绪信号，默认为中性
-    comment.sentiment = 0.5
-    comment.sentimentLabel = 'neutral'
-  } else {
-    // 归一化到 0-1 范围
-    const normalizedPositive = positiveScore / (positiveScore + negativeScore + neutralScore * 0.5)
-    comment.sentiment = normalizedPositive
-    
-    // 分类：积极（>0.6）、中性（0.4-0.6）、消极（<0.4）
-    if (comment.sentiment > 0.6) {
-      comment.sentimentLabel = 'positive'
-    } else if (comment.sentiment < 0.4) {
-      comment.sentimentLabel = 'negative'
-    } else {
-      comment.sentimentLabel = 'neutral'
+  // 计算正面词得分
+  for (const word of SENTIMENT_DICT.positive) {
+    if (content.includes(word.toLowerCase())) {
+      positiveScore += 1
+      // 带感叹号的加重
+      if (content.includes(word + '！') || content.includes(word + '!')) {
+        positiveScore += 0.5
+      }
     }
   }
   
-  return comment
+  // 计算负面词得分
+  for (const word of SENTIMENT_DICT.negative) {
+    if (content.includes(word.toLowerCase())) {
+      negativeScore += 1
+      if (content.includes(word + '！') || content.includes(word + '!')) {
+        negativeScore += 0.5
+      }
+    }
+  }
+  
+  // 考虑点赞数作为权重
+  const likeWeight = Math.log1p(comment.likeCount) / 5 // 点赞数越高，权重越大
+  positiveScore *= (1 + likeWeight)
+  negativeScore *= (1 + likeWeight)
+  
+  // 判断情感类型
+  const diff = positiveScore - negativeScore
+  const threshold = 0.5
+  
+  let type: SentimentType
+  if (diff > threshold) {
+    type = 'positive'
+  } else if (diff < -threshold) {
+    type = 'negative'
+  } else {
+    type = 'neutral'
+  }
+  
+  // 计算综合得分 (-1 到 1)
+  const score = Math.max(-1, Math.min(1, diff / (positiveScore + negativeScore + 1)))
+  
+  return { type, score }
 }
 
 /**
  * 批量分析评论情感
  */
 export async function analyzeCommentsSentiment(comments: Comment[]): Promise<Comment[]> {
-  const results = await Promise.all(
-    comments.map(comment => analyzeSentiment(comment))
-  )
-  return results
+  return comments.map(comment => {
+    const { type, score } = analyzeSentiment(comment)
+    return {
+      ...comment,
+      sentiment: type,
+      sentimentScore: score
+    }
+  })
 }
 
 /**
- * 统计情绪比例
+ * 计算情感统计
  */
 export function calculateEmotionStats(comments: Comment[]): EmotionStats {
-  const stats: EmotionStats = {
-    positive: 0,
-    neutral: 0,
-    negative: 0
+  const total = comments.length
+  if (total === 0) {
+    return {
+      positive: 0,
+      neutral: 0,
+      negative: 0,
+      total: 0,
+      positivePercent: 0,
+      neutralPercent: 0,
+      negativePercent: 0
+    }
   }
+  
+  const positive = comments.filter(c => c.sentiment === 'positive').length
+  const neutral = comments.filter(c => c.sentiment === 'neutral').length
+  const negative = comments.filter(c => c.sentiment === 'negative').length
+  
+  return {
+    positive,
+    neutral,
+    negative,
+    total,
+    positivePercent: Math.round((positive / total) * 100),
+    neutralPercent: Math.round((neutral / total) * 100),
+    negativePercent: Math.round((negative / total) * 100)
+  }
+}
 
-  comments.forEach(comment => {
-    const label = comment.sentimentLabel || 'neutral'
-    stats[label]++
-  })
+/**
+ * 获取最正面的评论
+ */
+export function getMostPositiveComments(comments: Comment[], limit: number = 5): Comment[] {
+  return comments
+    .filter(c => c.sentiment === 'positive')
+    .sort((a, b) => (b.sentimentScore || 0) - (a.sentimentScore || 0))
+    .slice(0, limit)
+}
 
-  return stats
+/**
+ * 获取最负面的评论
+ */
+export function getMostNegativeComments(comments: Comment[], limit: number = 5): Comment[] {
+  return comments
+    .filter(c => c.sentiment === 'negative')
+    .sort((a, b) => (a.sentimentScore || 0) - (b.sentimentScore || 0))
+    .slice(0, limit)
 }

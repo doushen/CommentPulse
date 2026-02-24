@@ -74,7 +74,7 @@ export class ShadowDOMCache {
   /**
    * 递归查询 Shadow DOM
    */
-  private queryShadowAll(selector: string, root: Document | Element): Element[] {
+  private queryShadowAll(selector: string, root: Document | Element | ShadowRoot): Element[] {
     const results: Element[] = []
     
     // 正常查询

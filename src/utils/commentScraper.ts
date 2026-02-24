@@ -1,243 +1,321 @@
-import type { Comment } from '@/types'
+// src/utils/commentScraper.ts
+// 评论抓取器 - 统一抓取逻辑
 
-/**
- * 从B站视频页面抓取评论数据
- * 适配新版B站页面结构
- */
+import type { Comment, ScrapingOptions, ScrapingResult } from '@/types'
+
 export class CommentScraper {
   private comments: Comment[] = []
-  private observer: MutationObserver | null = null
+  private isRunning = false
+  private abortController: AbortController | null = null
 
-  async startScraping(): Promise<Comment[]> {
-    this.comments = []
-    
-    // 等待评论区域加载
-    await this.waitForComments()
-    
-    // 抓取当前已加载的评论
-    this.scrapeCurrentComments()
-    
-    // 监听新评论加载
-    this.observeNewComments()
-    
-    // 滚动加载更多评论
-    this.loadMoreComments()
-    
-    return this.comments
-  }
-
-  private async waitForComments(maxWait = 10000): Promise<void> {
+  /**
+   * 开始抓取评论
+   */
+  async startScraping(options: ScrapingOptions = {}): Promise<ScrapingResult> {
     const startTime = Date.now()
     
-    while (Date.now() - startTime < maxWait) {
-      // 查找评论容器
-      const commentWrap = document.querySelector('.reply-wrap') || 
-                          document.querySelector('[class*="reply-wrap"]') ||
-                          document.querySelector('[class*="comment-wrap"]') ||
-                          document.querySelector('.bili-comment')
-      
-      if (commentWrap) {
-        console.log('CommentPulse: 找到评论区域', commentWrap.className)
-        return
-      }
-      
-      await new Promise(resolve => setTimeout(resolve, 200))
-    }
-    console.warn('CommentPulse: 等待评论区域超时')
-  }
-
-  private scrapeCurrentComments(): void {
-    // 直接使用已知的 B站评论区结构
-    const selectors = [
-      '.reply-wrap .reply-item',
-      '[class*="reply-wrap"] [class*="reply-item"]',
-      '.bili-comment .comment-item',
-      '[class*="comment-wrap"] [class*="comment-item"]'
-    ]
-
-    let totalComments = 0
-    
-    for (const selector of selectors) {
-      const elements = document.querySelectorAll(selector)
-      
-      if (elements.length > 0) {
-        console.log(`CommentPulse: 选择器 "${selector}" 找到 ${elements.length} 个评论`)
-        
-        elements.forEach((el, idx) => {
-          const comment = this.extractCommentData(el, idx)
-          if (comment && comment.content && comment.content.length > 2) {
-            // 避免重复
-            if (!this.comments.find(c => c.id === comment.id)) {
-              this.comments.push(comment)
-              totalComments++
-            }
-          }
-        })
-        
-        // 找到一个有效的选择器就退出
-        if (totalComments > 0) break
-      }
+    if (this.isRunning) {
+      return { comments: [], total: 0, duration: 0, error: '抓取已在进行中' }
     }
 
-    if (totalComments === 0) {
-      // 降级方案：尝试更宽松的查找
-      console.log('CommentPulse: 尝试降级方案...')
-      this.fallbackScrape()
-    } else {
-      console.log(`CommentPulse: 成功抓取 ${totalComments} 条评论，总计 ${this.comments.length} 条`)
+    this.isRunning = true
+    this.abortController = new AbortController()
+    this.comments = []
+
+    try {
+      const {
+        autoScroll = true,
+        maxComments = 1000,
+        includeReplies = false,
+        scrollDelay = 800
+      } = options
+
+      // 1. 自动滚动加载更多评论
+      if (autoScroll) {
+        await this.autoScroll(maxComments, scrollDelay)
+      }
+
+      // 2. 提取评论
+      this.comments = this.extractComments(includeReplies)
+
+      // 3. 保存到 storage
+      await this.saveToStorage()
+
+      return {
+        comments: this.comments,
+        total: this.comments.length,
+        duration: Date.now() - startTime
+      }
+
+    } catch (error) {
+      console.error('[CommentScraper] 抓取失败:', error)
+      return {
+        comments: this.comments,
+        total: this.comments.length,
+        duration: Date.now() - startTime,
+        error: error instanceof Error ? error.message : '未知错误'
+      }
+    } finally {
+      this.isRunning = false
+      this.abortController = null
     }
   }
 
-  private fallbackScrape(): void {
-    // 降级方案：查找用户信息+评论内容的组合
-    const userContents = document.querySelectorAll('.user-content, [class*="user-content"]')
-    
-    userContents.forEach((el, idx) => {
-      const parent = el.closest('.reply-item, [class*="reply-item"], li, div[class*="reply"]')
-      if (parent) {
-        const comment = this.extractCommentData(parent, idx)
-        if (comment && comment.content && comment.content.length > 2) {
-          if (!this.comments.find(c => c.id === comment.id)) {
-            this.comments.push(comment)
+  /**
+   * 停止抓取
+   */
+  stopScraping(): void {
+    this.abortController?.abort()
+    this.isRunning = false
+  }
+
+  /**
+   * 获取已抓取的评论
+   */
+  getComments(): Comment[] {
+    return [...this.comments]
+  }
+
+  /**
+   * 清空评论
+   */
+  clearComments(): void {
+    this.comments = []
+  }
+
+  /**
+   * 自动滚动页面加载评论
+   */
+  private async autoScroll(maxComments: number, delay: number): Promise<void> {
+    const scrollContainer = this.findScrollContainer()
+    if (!scrollContainer) {
+      console.warn('[CommentScraper] 未找到滚动容器')
+      return
+    }
+
+    let lastCommentCount = 0
+    let noChangeCount = 0
+    const maxNoChange = 3 // 连续3次无变化则停止
+
+    while (this.isRunning && !this.abortController?.signal.aborted) {
+      // 滚动到底部
+      scrollContainer.scrollTo({
+        top: scrollContainer.scrollHeight,
+        behavior: 'smooth'
+      })
+
+      await this.delay(delay)
+
+      // 检查是否有新评论
+      const currentCount = this.countCommentsInDOM()
+      if (currentCount >= maxComments) break
+
+      if (currentCount === lastCommentCount) {
+        noChangeCount++
+        if (noChangeCount >= maxNoChange) break
+      } else {
+        noChangeCount = 0
+        lastCommentCount = currentCount
+      }
+    }
+  }
+
+  /**
+   * 提取评论
+   */
+  private extractComments(includeReplies: boolean): Comment[] {
+    const comments: Comment[] = []
+    const seen = new Set<string>() // 去重
+
+    // 查找所有评论渲染器
+    const threads = this.queryShadowAll('bili-comment-thread-renderer')
+
+    for (const thread of threads) {
+      if (!thread.shadowRoot) continue
+
+      // 提取主评论
+      const mainComment = this.extractCommentFromRenderer(thread.shadowRoot)
+      if (mainComment && !seen.has(mainComment.id)) {
+        comments.push(mainComment)
+        seen.add(mainComment.id)
+      }
+
+      // 提取回复（可选）
+      if (includeReplies) {
+        const replies = thread.shadowRoot.querySelectorAll('bili-comment-renderer')
+        for (const reply of replies) {
+          if (!reply.shadowRoot) continue
+          const replyComment = this.extractCommentFromRenderer(reply.shadowRoot)
+          if (replyComment && !seen.has(replyComment.id)) {
+            comments.push(replyComment)
+            seen.add(replyComment.id)
           }
         }
       }
-    })
-    
-    console.log(`CommentPulse: 降级方案抓取 ${this.comments.length} 条评论`)
+    }
+
+    return comments
   }
 
-  private extractCommentData(element: Element, index: number): Comment | null {
+  /**
+   * 从单个渲染器提取评论
+   */
+  private extractCommentFromRenderer(shadowRoot: ShadowRoot): Comment | null {
     try {
-      // 用户名 - 从 user-name 或 user-info 中找
-      const userNameEl = element.querySelector('.user-name, [class*="user-name"], .username, [class*="username"]')
-      const username = userNameEl?.textContent?.trim() || 
-                       userNameEl?.getAttribute('text')?.trim() || 
-                       `用户${index}`
-
-      // 评论内容 - 从 reply-content 中找
-      const contentEl = element.querySelector('.reply-content, [class*="reply-content"], .comment-content, [class*="comment-content"]')
-      let content = contentEl?.textContent?.trim() || ''
-      
-      // 如果没找到，尝试获取元素的直接文本
-      if (!content) {
-        const allText = element.textContent || ''
-        const lines = allText.split('\n').map(l => l.trim()).filter(l => l.length > 0)
-        // 过滤掉非内容
-        content = lines.find(l => 
-          l.length > 3 && 
-          !l.match(/^\d+$/) && 
-          !l.includes('赞') &&
-          !l.includes('回复') &&
-          !l.includes('IP属地')
-        ) || ''
+      // 获取用户名
+      let username = '匿名'
+      const userInfo = shadowRoot.querySelector('bili-comment-user-info')
+      if (userInfo?.shadowRoot) {
+        const nameEl = userInfo.shadowRoot.querySelector('#user-name a')
+        username = nameEl?.textContent?.trim() || '匿名'
       }
 
-      if (!content || content.length < 3) {
+      // 获取评论内容
+      let content = ''
+      const contentDiv = shadowRoot.querySelector('#content')
+      if (contentDiv) {
+        content = contentDiv.textContent?.trim() || ''
+      }
+
+      // 如果没找到，尝试其他方式
+      if (!content) {
+        const richText = shadowRoot.querySelector('bili-rich-text')
+        if (richText) {
+          content = richText.textContent?.trim() || ''
+        }
+      }
+
+      // 过滤无效内容
+      if (!content || content.length < 2 || content.includes('置顶')) {
         return null
       }
 
-      // 点赞数 - 从 reply-info 中找数字
-      const replyInfoEl = element.querySelector('.reply-info, [class*="reply-info"]')
-      const likeText = replyInfoEl?.textContent?.trim() || '0'
-      const likeCount = this.parseCount(likeText)
+      // 获取点赞数
+      let likeCount = 0
+      const actionBtns = shadowRoot.querySelector('bili-comment-action-buttons-renderer')
+      if (actionBtns?.shadowRoot) {
+        const likeEl = actionBtns.shadowRoot.querySelector('#like')
+        if (likeEl) {
+          const likeText = likeEl.textContent?.trim() || '0'
+          likeCount = this.parseLikeCount(likeText)
+        }
+      }
 
-      // 回复数
-      const replyCountEl = element.querySelector('.reply-count, [class*="reply-count"]')
-      const replyCountText = replyCountEl?.textContent?.trim() || '0'
-      const replyCount = this.parseCount(replyCountText)
-
-      // 时间
-      const timeEl = element.querySelector('.reply-time, [class*="reply-time"], .time, [class*="time"]')
-      const time = timeEl?.textContent?.trim() || ''
-
-      // 生成唯一ID
-      const id = `${username}-${content.substring(0, 20)}-${index}-${Date.now()}`
+      // 获取时间
+      let time = ''
+      const timeEl = shadowRoot.querySelector('#pubdate')
+      if (timeEl) {
+        time = timeEl.textContent?.trim() || ''
+      }
 
       return {
-        id,
-        username: username.substring(0, 30),
+        id: this.generateCommentId(username, content),
+        username: username.substring(0, 20),
         content: content.substring(0, 500),
         likeCount,
-        replyCount,
+        replyCount: 0,
         time
       }
+
     } catch (error) {
-      console.error('CommentPulse: 提取评论数据失败', error)
+      console.error('[CommentScraper] 提取单条评论失败:', error)
       return null
     }
   }
 
-  private parseCount(text: string): number {
+  /**
+   * 递归查询 Shadow DOM
+   */
+  private queryShadowAll(selector: string, root: Document | Element = document): Element[] {
+    const results: Element[] = []
+    
+    // 正常查询
+    root.querySelectorAll(selector).forEach(el => results.push(el))
+    
+    // 递归 Shadow DOM
+    root.querySelectorAll('*').forEach(el => {
+      if (el.shadowRoot) {
+        results.push(...this.queryShadowAll(selector, el.shadowRoot))
+      }
+    })
+    
+    return results
+  }
+
+  /**
+   * 查找滚动容器
+   */
+  private findScrollContainer(): HTMLElement | null {
+    // B站评论区的滚动容器
+    const selectors = [
+      '.reply-list',
+      '.bili-comments__list',
+      '[class*="comment"] [class*="list"]'
+    ]
+    
+    for (const selector of selectors) {
+      const el = document.querySelector(selector) as HTMLElement
+      if (el) return el
+    }
+    
+    // 默认使用 body
+    return document.body
+  }
+
+  /**
+   * 统计 DOM 中评论数量
+   */
+  private countCommentsInDOM(): number {
+    return this.queryShadowAll('bili-comment-thread-renderer').length
+  }
+
+  /**
+   * 解析点赞数
+   */
+  private parseLikeCount(text: string): number {
     if (!text) return 0
     
-    const num = parseFloat(text.replace(/[^\d.]/g, ''))
-    if (isNaN(num)) return 0
+    // 处理 "1.2万" 格式
+    if (text.includes('万')) {
+      return Math.round(parseFloat(text) * 10000)
+    }
     
-    if (text.includes('万')) return Math.floor(num * 10000)
-    if (text.includes('k') || text.includes('K')) return Math.floor(num * 1000)
-    
-    return Math.floor(num)
+    return parseInt(text.replace(/[^\d]/g, '')) || 0
   }
 
-  private observeNewComments(): void {
-    const targetNode = document.body
-
-    let debounceTimer: NodeJS.Timeout | null = null
-    this.observer = new MutationObserver(() => {
-      if (debounceTimer) {
-        clearTimeout(debounceTimer)
-      }
-      debounceTimer = setTimeout(() => {
-        this.scrapeCurrentComments()
-      }, 500)
-    })
-
-    this.observer.observe(targetNode, {
-      childList: true,
-      subtree: true
-    })
+  /**
+   * 生成评论 ID
+   */
+  private generateCommentId(username: string, content: string): string {
+    const hash = `${username}-${content.substring(0, 30)}`
+      .split('')
+      .reduce((a, b) => ((a << 5) - a) + b.charCodeAt(0), 0)
+      .toString(36)
+    
+    return `cp-${Date.now()}-${hash.substring(0, 8)}`
   }
 
-  private async loadMoreComments(): Promise<void> {
-    let lastCommentCount = this.comments.length
-    let noChangeCount = 0
-
-    const scrollInterval = setInterval(() => {
-      window.scrollTo({
-        top: document.documentElement.scrollHeight,
-        behavior: 'smooth'
+  /**
+   * 保存到 storage
+   */
+  private async saveToStorage(): Promise<void> {
+    try {
+      await chrome.storage.local.set({
+        'commentpulse_comments': this.comments,
+        'commentpulse_lastUpdate': Date.now()
       })
-
-      this.scrapeCurrentComments()
-      
-      if (this.comments.length === lastCommentCount) {
-        noChangeCount++
-        if (noChangeCount >= 3) {
-          clearInterval(scrollInterval)
-          if (this.observer) {
-            this.observer.disconnect()
-          }
-        }
-      } else {
-        noChangeCount = 0
-        lastCommentCount = this.comments.length
-      }
-    }, 1500)
-
-    setTimeout(() => {
-      clearInterval(scrollInterval)
-    }, 15000)
-  }
-
-  stopScraping(): void {
-    if (this.observer) {
-      this.observer.disconnect()
-      this.observer = null
+    } catch (error) {
+      console.error('[CommentScraper] 保存失败:', error)
     }
   }
 
-  getComments(): Comment[] {
-    return this.comments
+  /**
+   * 延迟函数
+   */
+  private delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms))
   }
 }
+
+// 导出单例
+export const commentScraper = new CommentScraper()

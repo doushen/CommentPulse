@@ -27,7 +27,7 @@ chrome.runtime.onInstalled.addListener((details) => {
 })
 
 // ========== 消息处理中心 ==========
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   const { type, payload } = message
   
   switch (type) {

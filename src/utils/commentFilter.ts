@@ -151,7 +151,7 @@ function calculateCommentScore(comment: Comment): number {
 /**
  * 生成选中原因
  */
-function generateSelectionReason(comment: Comment, score: number): string {
+function generateSelectionReason(comment: Comment, _score: number): string {
   const reasons: string[] = []
   
   if (comment.likeCount >= 100) {

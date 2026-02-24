@@ -1,137 +1,236 @@
+// src/utils/commentFilter.ts
+// 评论筛选工具
+
 import type { Comment, TopComment } from '@/types'
 
 /**
- * 筛选三条最需关注的评论
+ * 筛选精选评论
  */
-export function filterTopComments(comments: Comment[]): TopComment[] {
-  const topComments: TopComment[] = []
+export function filterTopComments(
+  comments: Comment[],
+  options: {
+    limit?: number
+    minLikeCount?: number
+    includeReplies?: boolean
+    deduplicate?: boolean
+  } = {}
+): TopComment[] {
+  const {
+    limit = 10,
+    minLikeCount = 5,
+    includeReplies = false,
+    deduplicate = true
+  } = options
 
-  // 1. 最高赞提问
-  const questionComment = findTopQuestion(comments)
-  if (questionComment) {
-    topComments.push({
-      type: 'question',
-      comment: questionComment,
-      reason: '这是点赞数最高的提问，可能是观众最关心的问题'
-    })
-  }
+  let filtered = [...comments]
 
-  // 2. 最有建设性意见
-  const suggestionComment = findTopSuggestion(comments)
-  if (suggestionComment) {
-    topComments.push({
-      type: 'suggestion',
-      comment: suggestionComment,
-      reason: '这条评论包含建设性意见，对UP主改进内容有帮助'
-    })
-  }
-
-  // 3. 最具代表性的情绪宣泄
-  const emotionComment = findTopEmotion(comments)
-  if (emotionComment) {
-    topComments.push({
-      type: 'emotion',
-      comment: emotionComment,
-      reason: '这条评论代表了观众的主要情绪倾向'
-    })
-  }
-
-  return topComments
-}
-
-/**
- * 找到最高赞的提问
- */
-function findTopQuestion(comments: Comment[]): Comment | null {
-  const questionKeywords = ['？', '?', '什么', '为什么', '怎么', '如何', '能否', '可以吗', '吗？']
-  
-  const questions = comments.filter(comment => {
-    return questionKeywords.some(keyword => comment.content.includes(keyword))
-  })
-
-  if (questions.length === 0) {
-    // 如果没有明显的提问，选择点赞数最高的评论
-    return comments.sort((a, b) => b.likeCount - a.likeCount)[0] || null
-  }
-
-  // 按点赞数排序
-  questions.sort((a, b) => b.likeCount - a.likeCount)
-  return questions[0]
-}
-
-/**
- * 找到最有建设性的意见
- */
-function findTopSuggestion(comments: Comment[]): Comment | null {
-  const suggestionKeywords = ['建议', '可以', '希望', '建议', '推荐', '应该', '最好', '如果', '建议', '改进', '优化']
-  
-  const suggestions = comments.filter(comment => {
-    const hasKeyword = suggestionKeywords.some(keyword => comment.content.includes(keyword))
-    // 建设性意见通常有一定长度
-    const hasLength = comment.content.length > 10
-    return hasKeyword && hasLength
-  })
-
-  if (suggestions.length === 0) {
-    // 如果没有明显的建议，选择内容较长且点赞数较高的评论
-    return comments
-      .filter(c => c.content.length > 20)
-      .sort((a, b) => {
-        // 综合点赞数和内容长度
-        const scoreA = a.likeCount + a.content.length / 10
-        const scoreB = b.likeCount + b.content.length / 10
-        return scoreB - scoreA
-      })[0] || null
-  }
-
-  // 综合点赞数和内容长度排序
-  suggestions.sort((a, b) => {
-    const scoreA = a.likeCount + a.content.length / 10
-    const scoreB = b.likeCount + b.content.length / 10
-    return scoreB - scoreA
-  })
-
-  return suggestions[0]
-}
-
-/**
- * 找到最具代表性的情绪宣泄
- */
-function findTopEmotion(comments: Comment[]): Comment | null {
-  // 筛选出有明显情绪倾向的评论
-  const emotionalComments = comments.filter(comment => {
-    const sentiment = comment.sentiment || 0.5
-    // 极端情绪：非常积极或非常消极
-    return sentiment > 0.7 || sentiment < 0.3
-  })
-
-  if (emotionalComments.length === 0) {
-    // 如果没有极端情绪，选择情绪最明显的
-    return comments
-      .map(c => ({
-        ...c,
-        emotionScore: Math.abs((c.sentiment || 0.5) - 0.5)
-      }))
-      .sort((a, b) => b.emotionScore - a.emotionScore)[0] || null
-  }
-
-  // 选择点赞数适中的代表性评论（避免选择极端高赞的，选择中等偏上的）
-  emotionalComments.sort((a, b) => {
-    // 优先选择情绪极端且有一定点赞数的
-    const emotionA = Math.abs((a.sentiment || 0.5) - 0.5)
-    const emotionB = Math.abs((b.sentiment || 0.5) - 0.5)
+  // 1. 过滤低质量评论
+  filtered = filtered.filter(c => {
+    // 长度检查
+    if (c.content.length < 5) return false
     
-    if (Math.abs(emotionA - emotionB) > 0.1) {
-      return emotionB - emotionA
+    // 点赞数检查
+    if (c.likeCount < minLikeCount) return false
+    
+    // 过滤纯表情
+    if (isOnlyEmojis(c.content)) return false
+    
+    // 过滤重复内容
+    if (deduplicate && isDuplicateContent(c.content, filtered)) return false
+    
+    return true
+  })
+
+  // 2. 计算综合得分
+  const scored = filtered.map(comment => ({
+    comment,
+    score: calculateCommentScore(comment)
+  }))
+
+  // 3. 排序并取前N
+  const top = scored
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit)
+
+  // 4. 转换为 TopComment 格式
+  return top.map(({ comment, score }) => ({
+    id: comment.id,
+    username: comment.username,
+    content: comment.content,
+    likeCount: comment.likeCount,
+    reason: generateSelectionReason(comment, score)
+  }))
+}
+
+/**
+ * 筛选最有价值的回复
+ */
+export function filterValuableReplies(
+  comments: Comment[],
+  minLikeCount: number = 3
+): Comment[] {
+  return comments
+    .filter(c => c.replyCount > 0 || c.likeCount >= minLikeCount)
+    .sort((a, b) => b.likeCount - a.likeCount)
+}
+
+/**
+ * 按时间筛选（获取最新评论）
+ */
+export function filterRecentComments(
+  comments: Comment[],
+  hours: number = 24
+): Comment[] {
+  const cutoff = Date.now() - hours * 60 * 60 * 1000
+  
+  return comments.filter(c => {
+    const commentTime = parseCommentTime(c.time)
+    return commentTime > cutoff
+  })
+}
+
+/**
+ * 按情感筛选
+ */
+export function filterBySentiment(
+  comments: Comment[],
+  sentiment: 'positive' | 'neutral' | 'negative'
+): Comment[] {
+  return comments.filter(c => c.sentiment === sentiment)
+}
+
+/**
+ * 搜索评论
+ */
+export function searchComments(
+  comments: Comment[],
+  keyword: string
+): Comment[] {
+  const lowerKeyword = keyword.toLowerCase()
+  return comments.filter(c =>
+    c.content.toLowerCase().includes(lowerKeyword) ||
+    c.username.toLowerCase().includes(lowerKeyword)
+  )
+}
+
+/**
+ * 计算评论得分
+ */
+function calculateCommentScore(comment: Comment): number {
+  let score = 0
+  
+  // 点赞权重（对数）
+  score += Math.log1p(comment.likeCount) * 10
+  
+  // 内容长度权重（适中为佳）
+  const lengthScore = Math.min(comment.content.length, 200) / 10
+  score += lengthScore
+  
+  // 情感权重（正面加分，负面减分）
+  if (comment.sentiment === 'positive') {
+    score += 5
+  } else if (comment.sentiment === 'negative') {
+    score -= 3
+  }
+  
+  // 回复数权重
+  score += Math.log1p(comment.replyCount) * 3
+  
+  // 关键词加分
+  const valuableKeywords = ['干货', '学到了', '有用', '谢谢', '感谢', '详细', '清晰']
+  for (const keyword of valuableKeywords) {
+    if (comment.content.includes(keyword)) {
+      score += 3
+      break // 只加一次
     }
-    
-    // 情绪相近时，选择点赞数适中的（不是最高也不是最低）
-    const avgLike = emotionalComments.reduce((sum, c) => sum + c.likeCount, 0) / emotionalComments.length
-    const scoreA = a.likeCount + (a.likeCount > avgLike ? -Math.abs(a.likeCount - avgLike) : Math.abs(a.likeCount - avgLike))
-    const scoreB = b.likeCount + (b.likeCount > avgLike ? -Math.abs(b.likeCount - avgLike) : Math.abs(b.likeCount - avgLike))
-    
-    return scoreB - scoreA
-  })
+  }
+  
+  return score
+}
 
-  return emotionalComments[0] || null
+/**
+ * 生成选中原因
+ */
+function generateSelectionReason(comment: Comment, score: number): string {
+  const reasons: string[] = []
+  
+  if (comment.likeCount >= 100) {
+    reasons.push('高赞')
+  }
+  
+  if (comment.content.length > 100) {
+    reasons.push('长文')
+  }
+  
+  if (comment.sentiment === 'positive') {
+    reasons.push('好评')
+  }
+  
+  if (comment.replyCount > 5) {
+    reasons.push('热评')
+  }
+  
+  if (reasons.length === 0) {
+    reasons.push('优质')
+  }
+  
+  return reasons.join(' · ')
+}
+
+/**
+ * 检查是否纯表情
+ */
+function isOnlyEmojis(text: string): boolean {
+  const emojiRegex = /[\u{1F600}-\u{1F64F}]|[\u{1F300}-\u{1F5FF}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/gu
+  const emojis = text.match(emojiRegex) || []
+  return emojis.length > 0 && (text.length - emojis.join('').length) < 5
+}
+
+/**
+ * 检查是否重复内容
+ */
+function isDuplicateContent(content: string, allComments: Comment[]): boolean {
+  const similarCount = allComments.filter(c => {
+    const similarity = calculateSimilarity(content, c.content)
+    return similarity > 0.8 // 80% 相似度
+  }).length
+  
+  return similarCount > 3 // 超过3条相似视为重复
+}
+
+/**
+ * 计算文本相似度（简单的 Jaccard 系数）
+ */
+function calculateSimilarity(a: string, b: string): number {
+  const setA = new Set(a.split(''))
+  const setB = new Set(b.split(''))
+  
+  const intersection = new Set([...setA].filter(x => setB.has(x)))
+  const union = new Set([...setA, ...setB])
+  
+  return intersection.size / union.size
+}
+
+/**
+ * 解析评论时间
+ */
+function parseCommentTime(timeStr: string): number {
+  // 处理 "2024-01-15" 格式
+  if (/^\d{4}-\d{2}-\d{2}/.test(timeStr)) {
+    return new Date(timeStr).getTime()
+  }
+  
+  // 处理 "X小时前" 格式
+  const hourMatch = timeStr.match(/(\d+)小时前/)
+  if (hourMatch) {
+    return Date.now() - parseInt(hourMatch[1]) * 60 * 60 * 1000
+  }
+  
+  // 处理 "X天前" 格式
+  const dayMatch = timeStr.match(/(\d+)天前/)
+  if (dayMatch) {
+    return Date.now() - parseInt(dayMatch[1]) * 24 * 60 * 60 * 1000
+  }
+  
+  return Date.now()
 }
